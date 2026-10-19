@@ -5,7 +5,9 @@
 # A 7B at Q5 fits ENTIRELY in 6 GB VRAM, so decoding is GPU-bandwidth-bound
 # instead of DDR4-bound: ~10x faster than a 27B with partial offload.
 #
-# OpenAI-compatible API + web UI on http://127.0.0.1:8080
+# OpenAI-compatible API + web UI on http://<host>:8080
+# Bound to 0.0.0.0 so other Tailscale nodes can reach it directly; on the
+# tailnet, access is governed by your Tailscale ACL (allow tcp/8080).
 # NOTE: stop any other llama-server first:  pkill -x llama-server
 export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:${LD_LIBRARY_PATH:-}
 
@@ -17,5 +19,5 @@ exec "$HOME/llama.cpp/build/bin/llama-server" \
     -np 1 \
     -fa on \
     -ctk q8_0 -ctv q8_0 \
-    --host 127.0.0.1 \
+    --host 0.0.0.0 \
     --port 8080

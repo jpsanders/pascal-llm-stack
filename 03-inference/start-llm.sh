@@ -6,7 +6,11 @@
 # VRAM (24 layers needs 6360 MiB -> OOM), so ~70% of weights stream from
 # system RAM each token. Quality-first config.
 #
-# OpenAI-compatible API + web UI on http://127.0.0.1:8080
+# OpenAI-compatible API + web UI on http://<host>:8080
+# Bound to 0.0.0.0 so other Tailscale nodes can reach it directly; on the
+# tailnet, access is governed by your Tailscale ACL (allow tcp/8080).
+# NOTE: 0.0.0.0 also listens on LAN interfaces - if that bothers you, bind
+# to the tailscale IP instead: --host $(tailscale ip -4)
 export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:${LD_LIBRARY_PATH:-}
 
 exec "$HOME/llama.cpp/build/bin/llama-server" \
@@ -15,5 +19,5 @@ exec "$HOME/llama.cpp/build/bin/llama-server" \
     -ngl 20 \
     -c 4096 \
     -np 1 \
-    --host 127.0.0.1 \
+    --host 0.0.0.0 \
     --port 8080
