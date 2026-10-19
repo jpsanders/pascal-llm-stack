@@ -74,6 +74,13 @@ Partial offload (`-ngl N`) splits transformer blocks between VRAM and system RAM
 
 Beyond ~20 layers, adding more moves generation by 0.09 t/s. The DDR4 tail dominates. The ten-x lever is choosing a model that fits **entirely** in VRAM — a 7B at Q5 beats a 27B at Q4 by an order of magnitude on this card. Prompt processing stays fast either way; it parallelizes.
 
+One more data point: OpenCode's agent system prompt alone is **51k tokens**. With
+`--no-kv-offload` (KV in system RAM), every generated token re-reads that ~3.3 GB
+of KV over PCIe: generation drops to **1.9 t/s at 51k context** even though the
+same model does 22 t/s at chat-length contexts. Agent frameworks with huge fixed
+prompts are a bad match for small-VRAM GPUs; use them with cloud models and keep
+the local GPU for chat-length workloads.
+
 Corollary: check repo file sizes before falling in love with a model. "GLM-5.3-Flash" is ~200 GB at Q4 (six 50 GB shards), a 753B flagship is ~1.5 TB in BF16. Neither fits on a 56 GB disk, in 30 GB of RAM, or in 6 GB of VRAM. `-fa on -ctk q8_0 -ctv q8_0` halves the KV cache when a model barely fits; `pkill -x llama-server` stops a server without killing your own shell (the `-f` variant matches your own command line).
 
 ## 9. Serve it to the tailnet, not the internet
