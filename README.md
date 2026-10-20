@@ -93,12 +93,21 @@ curl https://<host>.<tailnet>.ts.net/v1/chat/completions \
   -d '{"messages":[{"role":"user","content":"hi"}]}'
 ```
 
+## Part 9b — the web GUI
+
+`start-web.sh` runs a small Python proxy on **:8080** that serves a self-contained
+chat GUI (`webui/index.html`) and streams `/v1/*` through to llama-server on
+`127.0.0.1:8090`. One port for everything: browser GUI, OpenAI API, OpenCode on
+other tailnet machines. Streaming SSE is relayed chunk-by-chunk (live tokens),
+the assistant's reasoning block renders collapsible, and the conversation
+persists in localStorage. The 8080 binding is what the Tailscale ACL gates.
+
 ## Layout
 
 ```
 01-driver/    install-nvidia-driver.sh, kernel-7.0.patch
 02-cuda/      setup-build-tools.sh, install-cuda-toolkit.sh, patch-cuda.sh
-03-inference/ build-llama-cpp.sh, start-llm.sh (27B), start-llm-mistral.sh (7B)
+03-inference/ build-llama-cpp.sh, start-llm*.sh, start-web.sh, llama-proxy.py, webui/
 04-tailscale/ setup-tailscale.sh
 ```
 

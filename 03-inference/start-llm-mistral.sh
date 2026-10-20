@@ -13,5 +13,5 @@ exec ~/llama.cpp/build/bin/llama-server \
     -np 1 \
     -fa on \
     -ctk q8_0 -ctv q8_0 \
-    --host 0.0.0.0 \
-    --port 8080
+    --host 127.0.0.1 \
+    --port 8090

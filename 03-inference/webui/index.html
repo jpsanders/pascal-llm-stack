@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>usb-ubuntu · local LLM</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --border: #2d333b;
+    --text: #e6edf3; --dim: #8b949e; --accent: #58a6ff; --user: #1f3a5f;
+    --ok: #3fb950; --warn: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; height: 100vh;
+         display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+           background: var(--panel); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); }
+  .dot.on { background: var(--ok); }
+  select, button, textarea, input { background: var(--panel2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+      font: inherit; outline: none; }
+  select:focus, textarea:focus, input:focus { border-color: var(--accent); }
+  #main { flex: 1; display: flex; min-height: 0; }
+  #chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #log { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .msg { margin: 0 0 14px; max-width: 78%; padding: 10px 14px; border-radius: 12px;
+         white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { background: var(--user); margin-left: auto; }
+  .msg.assistant { background: var(--panel); border: 1px solid var(--border); }
+  .msg .role { font-size: 11px; color: var(--dim); margin-bottom: 4px;
+               text-transform: uppercase; letter-spacing: .05em; }
+  .msg .stats { font-size: 11px; color: var(--dim); margin-top: 6px; }
+  details.think { margin: 0 0 8px; border-left: 3px solid var(--border);
+                  padding: 2px 10px; }
+  details.think summary { color: var(--dim); cursor: pointer; font-size: 12px; }
+  details.think .body { color: var(--dim); font-size: 13px; white-space: pre-wrap; }
+  pre { background: #0a0e14; border: 1px solid var(--border); border-radius: 8px;
+        padding: 10px; overflow-x: auto; font: 13px ui-monospace, monospace; }
+  code { font: 13px ui-monospace, monospace; background: #0a0e14; padding: 1px 5px;
+         border-radius: 4px; }
+  pre code { padding: 0; background: none; }
+  #composer { display: flex; gap: 10px; padding: 12px 16px; background: var(--panel);
+              border-top: 1px solid var(--border); }
+  #prompt { flex: 1; resize: none; height: 64px; }
+  #send { min-width: 92px; font-weight: 600; cursor: pointer; }
+  #send.stop { background: #67232b; border-color: #a1353f; }
+  #side { width: 260px; background: var(--panel); border-left: 1px solid var(--border);
+          padding: 14px; display: flex; flex-direction: column; gap: 12px;
+          overflow-y: auto; }
+  #side label { font-size: 12px; color: var(--dim); display: block; margin-bottom: 4px; }
+  #side textarea, #side input, #side select { width: 100%; }
+  #side .row { display: flex; align-items: center; gap: 8px; }
+  #side .val { font-size: 12px; color: var(--accent); min-width: 34px; text-align: right; }
+  #clear { cursor: pointer; }
+  .err { color: #f85149; }
+  @media (max-width: 760px) { #side { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="dot" id="status"></div>
+  <h1>usb-ubuntu · local LLM</h1>
+  <select id="model"></select>
+  <div style="flex:1"></div>
+  <span style="font-size:12px;color:var(--dim)" id="srvname"></span>
+</header>
+
+<div id="main">
+  <div id="chat">
+    <div id="log"></div>
+    <div id="composer">
+      <textarea id="prompt" placeholder="Prompt the local model…  (Enter = send, Shift+Enter = newline)"></textarea>
+      <button id="send">Send</button>
+    </div>
+  </div>
+
+  <div id="side">
+    <div><label>System prompt</label>
+      <textarea id="sysprompt" rows="5"></textarea></div>
+    <div><label>Temperature <span class="val" id="tempv">0.8</span></label>
+      <input type="range" id="temp" min="0" max="2" step="0.05" value="0.8"></div>
+    <div><label>Max tokens <span class="val" id="maxv">512</span></label>
+      <input type="range" id="maxtok" min="64" max="8192" step="64" value="512"></div>
+    <div class="row"><button id="clear" style="flex:1">Clear conversation</button></div>
+    <div style="font-size:11px;color:var(--dim)" id="hint"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const log = $("log"), promptEl = $("prompt"), sendBtn = $("send");
+let history = [];          // [{role, content, reasoning?}]
+let busy = false, aborter = null;
+
+/* ---------- settings persistence ---------- */
+const settings = JSON.parse(localStorage.getItem("llmgui.settings") || "{}");
+$("sysprompt").value = settings.sys || "";
+$("temp").value = settings.temp ?? 0.8; $("tempv").textContent = $("temp").value;
+$("maxtok").value = settings.max ?? 512; $("maxv").textContent = $("maxtok").value;
+function saveSettings() {
+  localStorage.setItem("llmgui.settings", JSON.stringify({
+    sys: $("sysprompt").value, temp: $("temp").value, max: $("maxtok").value }));
+}
+$("temp").oninput = e => { $("tempv").textContent = e.target.value; saveSettings(); };
+$("maxtok").oninput = e => { $("maxv").textContent = e.target.value; saveSettings(); };
+$("sysprompt").onchange = saveSettings;
+
+const savedHistory = localStorage.getItem("llmgui.history");
+if (savedHistory) { history = JSON.parse(savedHistory); history.forEach(renderMsg); }
+scrollDown();
+
+/* ---------- server status + models ---------- */
+async function refreshServer() {
+  try {
+    const r = await fetch("/v1/models");
+    const j = await r.json();
+    $("status").classList.add("on");
+    const sel = $("model");
+    sel.innerHTML = "";
+    for (const m of (j.data || [])) {
+      const o = document.createElement("option");
+      o.value = m.id; o.textContent = m.id;
+      sel.appendChild(o);
+    }
+    $("srvname").textContent = "llama.cpp · " + (j.data?.[0]?.id || "?");
+  } catch {
+    $("status").classList.remove("on");
+    $("srvname").textContent = "server unreachable";
+  }
+}
+refreshServer(); setInterval(refreshServer, 15000);
+
+/* ---------- rendering ---------- */
+function esc(s) { return s.replace(/&/g,"&").replace(/</g,"<").replace(/>/g,">"); }
+function md(s) {  // minimal markdown: fenced code, inline code, bold
+  const parts = esc(s).split(/```/);
+  return parts.map((p, i) => i % 2
+    ? "<pre><code>" + p.replace(/^\w*\n/, "") + "</code></pre>"
+    : p.replace(/`([^`\n]+)`/g, "<code>$1</code>")
+       .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+  ).join("");
+}
+function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+function renderMsg(m) {
+  const d = document.createElement("div");
+  d.className = "msg " + (m.role === "user" ? "user" : "assistant");
+  const role = document.createElement("div");
+  role.className = "role";
+  role.textContent = m.role === "user" ? "you" : ($("model").value || "assistant");
+  d.appendChild(role);
+  if (m.reasoning) {
+    const det = document.createElement("details"); det.className = "think";
+    const sum = document.createElement("summary"); sum.textContent = "thinking";
+    const body = document.createElement("div"); body.className = "body";
+    body.textContent = m.reasoning;
+    det.appendChild(sum); det.appendChild(body); d.appendChild(det);
+  }
+  const body = document.createElement("div");
+  body.innerHTML = md(m.content || "");
+  d.appendChild(body);
+  if (m.stats) {
+    const st = document.createElement("div"); st.className = "stats";
+    st.textContent = m.stats; d.appendChild(st);
+  }
+  log.appendChild(d);
+  scrollDown();
+  return d;
+}
+
+/* ---------- streaming chat ---------- */
+async function send() {
+  const text = promptEl.value.trim();
+  if (!text || busy) return;
+  busy = true; aborter = new AbortController();
+  sendBtn.textContent = "Stop"; sendBtn.classList.add("stop");
+  promptEl.value = "";
+
+  const userMsg = { role: "user", content: text };
+  history.push(userMsg); renderMsg(userMsg); saveHistory();
+
+  const aMsg = { role: "assistant", content: "", reasoning: "" };
+  const d = renderMsg(aMsg);
+  const bodyDiv = d.querySelector("div:last-of-type") || d;
+  const thinkBody = d.querySelector("details.think .body");
+
+  const sys = $("sysprompt").value.trim();
+  const messages = sys ? [{ role: "system", content: sys }, ...history] : [...history];
+
+  let t0 = performance.now(), ntok = 0;
+  try {
+    const res = await fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: aborter.signal,
+      body: JSON.stringify({
+        model: $("model").value,
+        messages,
+        stream: true,
+        temperature: parseFloat($("temp").value),
+        max_tokens: parseInt($("maxtok").value)
+      })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status + " " + (await res.text()).slice(0, 200));
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n"); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") continue;
+        let j; try { j = JSON.parse(payload); } catch { continue; }
+        const delta = j.choices?.[0]?.delta || {};
+        if (delta.reasoning_content) {
+          aMsg.reasoning += delta.reasoning_content;
+          if (thinkBody) thinkBody.textContent = aMsg.reasoning;
+          scrollDown();
+        }
+        if (delta.content) {
+          if (!aMsg.content) bodyDiv.innerHTML = "";   // first real token
+          aMsg.content += delta.content; ntok++;
+          bodyDiv.innerHTML = md(aMsg.content);
+          scrollDown();
+        }
+      }
+    }
+    const secs = (performance.now() - t0) / 1000;
+    aMsg.stats = ntok + " tok · " + (ntok / Math.max(secs, 0.1)).toFixed(1) + " tok/s · " + secs.toFixed(1) + "s";
+  } catch (e) {
+    if (e.name !== "AbortError") {
+      const err = document.createElement("div");
+      err.className = "err"; err.textContent = "⚠ " + e.message;
+      d.appendChild(err);
+    }
+    aMsg.stats = "stopped";
+  }
+  d.querySelector(".stats")?.remove();
+  if (aMsg.stats) { const st = document.createElement("div"); st.className = "stats";
+                    st.textContent = aMsg.stats; d.appendChild(st); }
+  history.push(aMsg); saveHistory();
+  busy = false; aborter = null;
+  sendBtn.textContent = "Send"; sendBtn.classList.remove("stop");
+  scrollDown();
+}
+
+function saveHistory() {
+  try { localStorage.setItem("llmgui.history", JSON.stringify(history.slice(-60))); }
+  catch { /* quota */ }
+}
+
+/* ---------- events ---------- */
+sendBtn.onclick = () => busy ? (aborter?.abort()) : send();
+promptEl.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$("clear").onclick = () => {
+  history = []; log.innerHTML = ""; localStorage.removeItem("llmgui.history");
+  const d = document.createElement("div");
+  d.className = "msg assistant"; d.textContent = "Conversation cleared.";
+  log.appendChild(d);
+};
+</script>
+</body>
+</html>
