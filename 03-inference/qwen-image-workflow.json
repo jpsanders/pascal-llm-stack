@@ -1,0 +1,105 @@
+{
+ "prompt": {
+  "1": {
+   "class_type": "UnetLoaderGGUF",
+   "inputs": {
+    "unet_name": "qwen-image-2.1-turbo-Q8_0.gguf"
+   }
+  },
+  "2": {
+   "class_type": "CLIPLoader",
+   "inputs": {
+    "clip_name": "qwen3vl_8b_abliterated_int8_convrot.safetensors",
+    "type": "qwen_image"
+   }
+  },
+  "3": {
+   "class_type": "VAELoader",
+   "inputs": {
+    "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+   }
+  },
+  "4": {
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "clip": [
+     "2",
+     0
+    ],
+    "text": "A photorealistic close-up portrait of a capybara wearing tiny reading glasses, sitting in a cozy library, warm golden hour light through a window, shallow depth of field, 85mm lens, highly detailed fur"
+   }
+  },
+  "5": {
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "clip": [
+     "2",
+     0
+    ],
+    "text": ""
+   }
+  },
+  "6": {
+   "class_type": "EmptySD3LatentImage",
+   "inputs": {
+    "width": 1024,
+    "height": 1024,
+    "batch_size": 1
+   }
+  },
+  "7": {
+   "class_type": "KSampler",
+   "inputs": {
+    "model": [
+     "1",
+     0
+    ],
+    "positive": [
+     "4",
+     0
+    ],
+    "negative": [
+     "5",
+     0
+    ],
+    "latent_image": [
+     "6",
+     0
+    ],
+    "seed": 42,
+    "steps": 8,
+    "cfg": 1.0,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "denoise": 1.0
+   }
+  },
+  "8": {
+   "class_type": "VAEDecodeTiled",
+   "inputs": {
+    "samples": [
+     "7",
+     0
+    ],
+    "vae": [
+     "3",
+     0
+    ],
+    "tile_size": 512,
+    "overlap": 64,
+    "temporal_size": 64,
+    "temporal_overlap": 8
+   }
+  },
+  "9": {
+   "class_type": "SaveImage",
+   "inputs": {
+    "images": [
+     "8",
+     0
+    ],
+    "filename_prefix": "qwen_test/capybara_v2"
+   }
+  }
+ }
+}
