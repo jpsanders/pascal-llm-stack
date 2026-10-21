@@ -6,12 +6,14 @@
 export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:${LD_LIBRARY_PATH:-}
 
 exec ~/llama.cpp/build/bin/llama-server \
-    -m ~/models/MistralRP-Noromaid-NSFW-7B-Q5_K_M.gguf \
+    -m /mnt/ai-store/models/MistralRP-Noromaid-NSFW-7B-Q5_K_M.gguf \
     --alias mistralrp-7b \
     -ngl 99 \
     -c 65536 --no-kv-offload --rope-scaling yarn --rope-scale 2 --yarn-orig-ctx 32768 \
     -np 1 \
     -fa on \
+    --mlock \
+    --cache-reuse 256 \
     -ctk q8_0 -ctv q8_0 \
     --host 127.0.0.1 \
     --port 8090
