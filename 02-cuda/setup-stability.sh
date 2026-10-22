@@ -21,19 +21,18 @@ swapon --show
 free -h | grep -i swap
 
 echo
-echo "=== [2/2] GPU power limit ==="
+echo "=== [2/2] GPU power/clock limits ==="
 CUR=$(nvidia-smi --query-gpu=power.limit --format=csv,noheader,nounits | head -1)
-echo "current power limit: ${CUR} W"
-if [ "$CUR" -gt 70 ]; then
-    if nvidia-smi -pl 70 2>/dev/null; then
-        echo "power limit set to 70 W"
-    else
-        echo "70 W refused, trying 60 W..."
-        nvidia-smi -pl 60 || echo "WARNING: could not set a power limit"
+if [[ "$CUR" =~ ^[0-9]+$ ]]; then
+    if [ "$CUR" -gt 70 ]; then
+        nvidia-smi -pl 70 2>/dev/null || nvidia-smi -pl 60 || echo "power limit unsupported"
     fi
+    echo "power limit: $(nvidia-smi --query-gpu=power.limit --format=csv,noheader | head -1)"
+else
+    echo "power limit control: NOT SUPPORTED on this GPU (mobile GeForce)."
+    nvidia-smi -lgc 1500,1500 2>/dev/null && echo "clock cap 1500 MHz set" || \
+        echo "clock lock also unsupported - thermal mitigation must be physical"
 fi
-nvidia-smi --query-gpu=power.limit --format=csv,noheader | head -1
-
 echo
 echo "=== hardening done ==="
 echo "Note: the power limit resets on reboot; re-run this script (or add it to"
