@@ -9,7 +9,10 @@
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Run with: sudo bash $0"; exit 1; }
 
-U=james-sanders
+# Resolve the REAL invoking user (sudo sets $HOME to /root)
+U="${SUDO_USER:-$USER}"
+REAL_HOME=$(getent passwd "$U" | cut -d: -f6)
+echo "installing services for user: $U (home: $REAL_HOME)"
 ENV="LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64"
 
 # Stop any session-spawned copies so the services own the ports/GPU
@@ -27,7 +30,7 @@ Conflicts=comfyui.service
 [Service]
 User=$U
 Environment=$ENV
-ExecStart=$HOME/llama.cpp/build/bin/llama-server -m /mnt/ai-store/models/MistralRP-Noromaid-NSFW-7B-Q5_K_M.gguf --alias mistralrp-7b -ngl 99 -c 4096 -np 1 -fa on -ctk q8_0 -ctv q8_0 --mlock --cache-reuse 256 --host 127.0.0.1 --port 8090
+ExecStart=$REAL_HOME/llama.cpp/build/bin/llama-server -m /mnt/ai-store/models/MistralRP-Noromaid-NSFW-7B-Q5_K_M.gguf --alias mistralrp-7b -ngl 99 -c 4096 -np 1 -fa on -ctk q8_0 -ctv q8_0 --mlock --cache-reuse 256 --host 127.0.0.1 --port 8090
 Restart=on-failure
 RestartSec=5
 
@@ -44,8 +47,8 @@ Conflicts=llama-server.service
 [Service]
 User=$U
 Environment=$ENV
-WorkingDirectory=$HOME/ComfyUI
-ExecStart=$HOME/comfy-venv/bin/python main.py --listen 0.0.0.0 --port 8188 --output-directory /mnt/ai-store/comfy/output --fp32-vae --cache-ram 6
+WorkingDirectory=$REAL_HOME/ComfyUI
+ExecStart=$REAL_HOME/comfy-venv/bin/python main.py --listen 0.0.0.0 --port 8188 --output-directory /mnt/ai-store/comfy/output --fp32-vae --cache-ram 6
 Restart=on-failure
 RestartSec=5
 
@@ -60,7 +63,7 @@ After=network.target llama-server.service
 
 [Service]
 User=$U
-ExecStart=/usr/bin/python3 $HOME/nvidia-gpu-install/llama-proxy.py
+ExecStart=/usr/bin/python3 $REAL_HOME/nvidia-gpu-install/llama-proxy.py
 Restart=always
 RestartSec=3
 
