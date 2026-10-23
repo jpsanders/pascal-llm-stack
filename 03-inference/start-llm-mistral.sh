@@ -12,8 +12,8 @@ exec ~/llama.cpp/build/bin/llama-server \
     -c 65536 --no-kv-offload --rope-scaling yarn --rope-scale 2 --yarn-orig-ctx 32768 \
     -np 1 \
     -fa on \
-    --mlock \
-    --cache-reuse 256 \
+    \
+    \
     -ctk q8_0 -ctv q8_0 \
     --host 127.0.0.1 \
     --port 8090

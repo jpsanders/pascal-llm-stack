@@ -11,7 +11,7 @@ exec ~/llama.cpp/build/bin/llama-server \
     -c 4096 \
     -np 1 \
     -fa on \
-    --mlock \
-    --cache-reuse 256 \
+    \
+    \
     --host 127.0.0.1 \
     --port 8090
