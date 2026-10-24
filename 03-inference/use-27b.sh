@@ -20,7 +20,7 @@ Conflicts=llama-server.service comfyui.service
 [Service]
 User=$U
 Environment=LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64
-ExecStart=$REAL_HOME/llama.cpp/build/bin/llama-server -m /mnt/ai-store/models/Huihui-Qwen3.8-27B-abliterated-UD-Q4_K_XL.gguf --alias qwen3.8-27b -ngl 20 -c 4096 -np 1 -fa on --stop "<|im_end|>" --stop "<|im_start|>" --host 127.0.0.1 --port 8090
+ExecStart=$REAL_HOME/llama.cpp/build/bin/llama-server -m /mnt/ai-store/models/Huihui-Qwen3.8-27B-abliterated-UD-Q4_K_XL.gguf --alias qwen3.8-27b -ngl 20 -c 4096 -np 1 -fa on -r "<|im_end|>" -r "<|im_start|>" --host 127.0.0.1 --port 8090
 Restart=on-failure
 RestartSec=5
 

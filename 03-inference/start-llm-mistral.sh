@@ -15,5 +15,5 @@ exec ~/llama.cpp/build/bin/llama-server \
     \
     \
     -ctk q8_0 -ctv q8_0 \
-    --stop "<|im_end|>" --stop "<|im_start|>" --host 127.0.0.1 \
+    -r "<|im_end|>" -r "<|im_start|>" --host 127.0.0.1 \
     --port 8090
