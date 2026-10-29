@@ -8,10 +8,9 @@ set -euo pipefail
 F=/etc/systemd/system/llama-server.service
 [ -f "$F" ] || { echo "ERROR: $F not found"; exit 1; }
 
-if ! grep -q 'im_end' "$F"; then
-    sed -i 's#--host 127.0.0.1#-r "<|im_end|>" -r "<|im_start|>" --host 127.0.0.1#' "$F"
-    systemctl daemon-reload
-fi
+# idempotent: the --stop pattern only matches while the broken flag remains
+sed -i 's#--host 127.0.0.1#-r "<|im_end|>" -r "<|im_start|>" --host 127.0.0.1#' "$F"
+systemctl daemon-reload
 systemctl restart llama-server
 sleep 3
 echo "llama-server: $(systemctl is-active llama-server)"
