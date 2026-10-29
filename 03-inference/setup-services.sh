@@ -30,7 +30,7 @@ Conflicts=comfyui.service
 [Service]
 User=$U
 Environment=$ENV
-ExecStart=$REAL_HOME/llama.cpp/build/bin/llama-server -m /mnt/ai-store/models/MistralRP-Noromaid-NSFW-7B-Q5_K_M.gguf --alias mistralrp-7b -ngl 99 -c 4096 -np 1 -fa on -ctk q8_0 -ctv q8_0 --mlock --cache-reuse 256 --host 127.0.0.1 --port 8090
+ExecStart=$REAL_HOME/llama.cpp/build/bin/llama-server -m /mnt/ai-store/models/MistralRP-Noromaid-NSFW-7B-Q5_K_M.gguf --alias mistralrp-7b -ngl 99 -c 4096 -np 1 -fa on -ctk q8_0 -ctv q8_0 -r "<|im_end|>" -r "<|im_start|>" --host 127.0.0.1 --port 8090
 Restart=on-failure
 RestartSec=5
 
