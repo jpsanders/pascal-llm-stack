@@ -1,0 +1,9 @@
+# large downloads and build artifacts never belong in the repo
+*.gguf
+*.run
+*.deb
+build/
+models/
+nvidia-*/
+cuda-compat-libs/
+*.log
