@@ -102,6 +102,17 @@ other tailnet machines. Streaming SSE is relayed chunk-by-chunk (live tokens),
 the assistant's reasoning block renders collapsible, and the conversation
 persists in localStorage. The 8080 binding is what the Tailscale ACL gates.
 
+## 10. After a kernel update: the smoke test
+
+DKMS rebuilds the patched module for every new kernel, but nothing tells you when that build fails until the GPU has gone missing after a reboot. `05-checks/smoke-test.sh` checks each layer an update can break, from the bottom up: the DKMS build for the running kernel, the version of the loaded module, `nvidia-smi` and the compute capability, `libcuda.so.1` still pointing at the 570 userspace (the trap in section 3), and llama-server answering on the GPU at a sane speed. It prints PASS, FAIL or SKIP for each check and exits 1 on any failure.
+
+```bash
+bash 05-checks/smoke-test.sh                 # any time
+sudo bash 05-checks/install-smoke-test.sh    # every kernel update from now on, automatically
+```
+
+The installer adds two things. A kernel hook runs after DKMS's own and warns before you reboot when the nvidia module did not build for the new kernel. A oneshot service runs the full test on the first boot of each new kernel; a failure shows in `systemctl --failed` and in `journalctl -u pascal-smoke-test`. `MIN_TPS` (default 15) is the slowest generation that still passes: this card does about 22 tokens per second with a 7B in VRAM, and a CPU fallback does a fraction of that. `--remove` takes it all out again.
+
 ## Layout
 
 ```
@@ -109,6 +120,7 @@ persists in localStorage. The 8080 binding is what the Tailscale ACL gates.
 02-cuda/      setup-build-tools.sh, install-cuda-toolkit.sh, patch-cuda.sh
 03-inference/ build-llama-cpp.sh, start-llm*.sh, start-web.sh, llama-proxy.py, webui/
 04-tailscale/ setup-tailscale.sh
+05-checks/    smoke-test.sh, install-smoke-test.sh
 ```
 
 ## License
