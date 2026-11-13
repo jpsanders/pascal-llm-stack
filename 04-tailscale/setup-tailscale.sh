@@ -25,8 +25,8 @@ echo
 echo "=== Tailscale status ==="
 tailscale status | head -5
 echo
-echo "Your machine's tailnet URL (use this from capivara):"
+echo "Your machine's tailnet URL (use this from your other devices):"
 tailscale status --self --json | grep -oE 'https://[^"]*ts\.net' | head -1 || true
 echo
-echo "LLM API (from capivara):  https://<your-host>.ts.net/v1/chat/completions"
-echo "Web UI   (from capivara): https://<your-host>.ts.net/"
+echo "LLM API (from your devices):  https://<your-host>.ts.net/v1/chat/completions"
+echo "Web UI   (from your devices): https://<your-host>.ts.net/"
