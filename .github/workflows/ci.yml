@@ -1,0 +1,35 @@
+---
+name: ci
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The scripts need a Pascal GPU to run for real, so CI checks everything that can be checked without one.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+      - name: Every shell script parses, and shellcheck finds no errors
+        run: |
+          for f in pascal-llm $(git ls-files '*.sh'); do bash -n "$f"; done
+          shellcheck --severity=error pascal-llm $(git ls-files '*.sh')
+      - name: The Python files compile
+        run: python3 -m py_compile $(git ls-files '*.py')
+      - name: The ComfyUI workflows are valid JSON
+        run: for f in $(git ls-files '*.json'); do python3 -m json.tool "$f" > /dev/null; done
+      - name: The man page matches docs/MANUAL.md
+        run: python3 scripts/build_man.py --check
+      - name: The entry point answers without a GPU
+        run: |
+          ./pascal-llm --version
+          ./pascal-llm steps
+          ./pascal-llm status
+          ./pascal-llm guide | head -1

@@ -1,12 +1,44 @@
-# pascal-llm-stack
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.png">
+    <img alt="pascal-llm-stack: local LLMs on a 2016 GPU, on the newest Ubuntu" src="docs/images/banner-light.png" width="100%">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/jpsanders/pascal-llm-stack/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/jpsanders/pascal-llm-stack/ci.yml?branch=main&label=CI&logo=github"></a>
+  <a href="https://github.com/jpsanders/pascal-llm-stack/releases/latest"><img alt="Release 1.2.0" src="https://img.shields.io/badge/release-1.2.0-a95719"></a>
+  <img alt="GTX 1060, Pascal sm_61" src="https://img.shields.io/badge/GPU-GTX%201060%20(sm__61)-76B900?logo=nvidia&logoColor=white">
+  <img alt="Ubuntu 26.04, kernel 7.0" src="https://img.shields.io/badge/ubuntu-26.04%20%7C%20kernel%207.0-E95420?logo=ubuntu&logoColor=white">
+  <img alt="CUDA 12.8" src="https://img.shields.io/badge/CUDA-12.8-76B900">
+  <img alt="22 tokens a second" src="https://img.shields.io/badge/7B-22%20tokens%2Fs-a95719">
+  <a href="#with-an-ai-agent"><img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude%20Code-plugin-a95719"></a>
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue"></a>
+  <a href="https://github.com/jpsanders/pascal-llm-stack/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/jpsanders/pascal-llm-stack?style=flat&logo=github&color=a95719"></a>
+</p>
 
 A working recipe for running local LLMs on a Pascal-era GPU (GTX 1060) under the newest Ubuntu and the newest kernel.
 
-The driver said unsupported. CUDA said unsupported. PyTorch's wheels said unsupported. The GPU is fine — 6 GB of 2016 silicon serves 22 tokens per second once every layer of the stack is told the truth about the year. Every claim here was executed and benchmarked on Ubuntu 26.04.1, kernel 7.0.0-30/38, GTX 1060 Mobile 6 GB (Optimus, Intel iGPU drives the display), 12 threads, 30 GB RAM.
+The driver said unsupported. CUDA said unsupported. PyTorch's wheels said unsupported. The GPU is fine: 6 GB of 2016 silicon serves 22 tokens per second once every layer of the stack is told the truth about the year. Every claim here was executed and benchmarked on Ubuntu 26.04.1, kernel 7.0.0-30/38, GTX 1060 Mobile 6 GB (Optimus, Intel iGPU drives the display), 12 threads, 30 GB RAM.
+
+## Start here
+
+`pascal-llm` runs the numbered steps in order, says what each does, and checks the result:
+
+```sh
+git clone https://github.com/jpsanders/pascal-llm-stack && cd pascal-llm-stack
+./pascal-llm steps                     # the ten steps, the script each runs
+sudo ./pascal-llm run driver           # then build-tools, cuda, llama, services, tailscale, smoke-test
+./pascal-llm status                    # module, GPU, CUDA, services, the API on 8080
+./pascal-llm check                     # the smoke test
+```
+
+`./pascal-llm guide` prints the full manual and `./pascal-llm man --install` makes `man pascal-llm` work. The sections
+below are why each step exists.
 
 ## 1. The distro recommends a driver that cannot drive the card
 
-`ubuntu-drivers` offers `nvidia-driver-580`. NVIDIA dropped Pascal after branch 570, so 580 will never bind to the GPU. Worse, `apt-cache policy nvidia-driver-570` reports candidate `580.178.04` — the "570" package is a transitional pointer to 580. The only real legacy branch is NVIDIA's own `.run` from the Unix archive, and it does not compile on kernel 7.0 out of the box. `01-driver/install-nvidia-driver.sh` downloads it, patches it (see `kernel-7.0.patch`, 6 files), installs with DKMS, and reboots into a working `nvidia-smi`.
+`ubuntu-drivers` offers `nvidia-driver-580`. NVIDIA dropped Pascal after branch 570, so 580 will never bind to the GPU. Worse, `apt-cache policy nvidia-driver-570` reports candidate `580.178.04`, because the "570" package is a transitional pointer to 580. The only real legacy branch is NVIDIA's own `.run` from the Unix archive, and it does not compile on kernel 7.0 out of the box. `01-driver/install-nvidia-driver.sh` downloads it, patches it (see `kernel-7.0.patch`, 6 files), installs with DKMS, and reboots into a working `nvidia-smi`.
 
 ## 2. The 570 kernel module predates kernel 7.0 by a year
 
@@ -17,11 +49,11 @@ Four separate kernel API rewrites break the build. The patch fixes each, version
 | `in_irq()` removed | switch to `in_hardirq()` in `nv-time.h`, `os-interface.c` |
 | `struct dma_map_ops::map_resource` removed | peer-DMA via dma_map_ops disabled; the `dma_map_resource()` function itself still exists |
 | `vm_area_struct.__vm_flags` gone; `vm_flags` is a `const` bitmap behind a union | use the kernel's inline `vma_flags_set_word()`/`vma_flags_clear_word()` |
-| VMA locking redesigned: `VMA_LOCK_OFFSET` gone, `__is_vma_write_locked()` takes one arg, refcount uses `VM_REFCNT_EXCLUDE_READERS_FLAG` bits | NVIDIA's open-coded GPL workaround rewritten per the 7.0 protocol documented in `mm_types.h`: set the exclude-readers flag, drain readers on `mm->vma_writer_wait`, `WRITE_ONCE(vm_lock_seq)`, clear the flag — non-GPL inline helpers only |
+| VMA locking redesigned: `VMA_LOCK_OFFSET` gone, `__is_vma_write_locked()` takes one arg, refcount uses `VM_REFCNT_EXCLUDE_READERS_FLAG` bits | NVIDIA's open-coded GPL workaround rewritten per the 7.0 protocol documented in `mm_types.h`: set the exclude-readers flag, drain readers on `mm->vma_writer_wait`, `WRITE_ONCE(vm_lock_seq)`, clear the flag: non-GPL inline helpers only |
 
-The last one is the interesting one: `vm_flags_set()` is a static inline in `mm.h`, but it calls the GPL-only `__vma_start_write()`, which a proprietary module may not reference — that is why NVIDIA open-coded the lock in the first place. The new protocol was fully documented in the `vm_area_struct` comments, which was enough to re-implement it.
+The last one is the interesting one: `vm_flags_set()` is a static inline in `mm.h`, but it calls the GPL-only `__vma_start_write()`, which a proprietary module may not reference, which is why NVIDIA open-coded the lock in the first place. The new protocol was fully documented in the `vm_area_struct` comments, which was enough to re-implement it.
 
-Two installer flags matter on top of the patch: `--no-drm` (the DRM module has its own API churn and is not needed for CUDA on Optimus laptops where the iGPU drives the display) and `--no-x-check` (silent mode auto-aborts while X is running otherwise). DKMS builds for the running kernel only — a kernel installed *before* the driver needs `sudo dkms autoinstall` after booting into it.
+Two installer flags matter on top of the patch: `--no-drm` (the DRM module has its own API churn and is not needed for CUDA on Optimus laptops where the iGPU drives the display) and `--no-x-check` (silent mode auto-aborts while X is running otherwise). DKMS builds for the running kernel only, so a kernel installed *before* the driver needs `sudo dkms autoinstall` after booting into it.
 
 ## 3. `apt install nvidia-cuda-toolkit` quietly breaks the driver you just installed
 
@@ -35,14 +67,14 @@ Ubuntu 26.04 ships libxml2 with SONAME `.so.16` (major bump). The installer bina
 
 ## 5. The toolkit cannot parse the system glibc
 
-Two separate checks, two separate fixes. First the installer refuses gcc 15 (`unsupported compiler version`) — harmless for a toolkit install that compiles nothing, so `--override`. Then, once you compile anything, cudafe++ dies on glibc 2.43's new C23 math declarations:
+Two separate checks, two separate fixes. First the installer refuses gcc 15 (`unsupported compiler version`), which is harmless for a toolkit install that compiles nothing, so `--override`. Then, once you compile anything, cudafe++ dies on glibc 2.43's new C23 math declarations:
 
 ```
 mathcalls.h(83): error: exception specification is incompatible with
 that of previous function "cospi" (declared at .../crt/math_functions.h)
 ```
 
-`--diag_suppress` does not work — EDG treats declaration merging as a hard error. `02-cuda/patch-cuda.sh` backports NVIDIA's own CUDA-12.9 fix: append `noexcept(true)` to the six conflicting declarations in `crt/math_functions.h` (backup kept as `.bak`).
+`--diag_suppress` does not work: EDG treats declaration merging as a hard error. `02-cuda/patch-cuda.sh` backports NVIDIA's own CUDA-12.9 fix: append `noexcept(true)` to the six conflicting declarations in `crt/math_functions.h` (backup kept as `.bak`).
 
 ## 6. PyTorch wheels dropped your GPU
 
@@ -69,10 +101,10 @@ Partial offload (`-ngl N`) splits transformer blocks between VRAM and system RAM
 |---|---|---|---|
 | Qwen3.8-27B Q4_K_XL (16.2 GiB) | `-ngl 16` | 69 t/s | 1.96 t/s |
 | Qwen3.8-27B Q4_K_XL | `-ngl 20` | 70 t/s | 2.05 t/s |
-| Qwen3.8-27B Q4_K_XL | `-ngl 24` | OOM — needs 6360 MiB | |
+| Qwen3.8-27B Q4_K_XL | `-ngl 24` | OOM: needs 6360 MiB | |
 | Mistral 7B fine tune Q5_K_M (4.78 GiB) | `-ngl 99` | 338 t/s | 22.4 t/s |
 
-Beyond ~20 layers, adding more moves generation by 0.09 t/s. The DDR4 tail dominates. The ten-x lever is choosing a model that fits **entirely** in VRAM — a 7B at Q5 beats a 27B at Q4 by an order of magnitude on this card. Prompt processing stays fast either way; it parallelizes.
+Beyond ~20 layers, adding more moves generation by 0.09 t/s. The DDR4 tail dominates. The ten-x lever is choosing a model that fits **entirely** in VRAM: a 7B at Q5 beats a 27B at Q4 by an order of magnitude on this card. Prompt processing stays fast either way; it parallelizes.
 
 One more data point: OpenCode's agent system prompt alone is **51k tokens**. With
 `--no-kv-offload` (KV in system RAM), every generated token re-reads that ~3.3 GB
@@ -85,7 +117,7 @@ Corollary: check repo file sizes before falling in love with a model. "GLM-5.3-F
 
 ## 9. Serve it to the tailnet, not the internet
 
-`04-tailscale/setup-tailscale.sh` installs Tailscale and runs `tailscale serve --bg 8080`: the loopback-only server appears as `https://<host>.<tailnet>.ts.net` with valid TLS, reachable only by your own devices. No inbound ports, no port forwarding, no allow lists — Tailscale is outbound-only (UDP 41641, TCP 443 fallback). From another machine:
+`04-tailscale/setup-tailscale.sh` installs Tailscale and runs `tailscale serve --bg 8080`: the loopback-only server appears as `https://<host>.<tailnet>.ts.net` with valid TLS, reachable only by your own devices. No inbound ports, no port forwarding, no allow lists: Tailscale is outbound only (UDP 41641, TCP 443 fallback). From another machine:
 
 ```bash
 curl https://<host>.<tailnet>.ts.net/v1/chat/completions \
@@ -93,7 +125,7 @@ curl https://<host>.<tailnet>.ts.net/v1/chat/completions \
   -d '{"messages":[{"role":"user","content":"hi"}]}'
 ```
 
-## Part 9b — the web GUI
+## 9b. The web GUI
 
 `start-web.sh` runs a small Python proxy on **:8080** that serves a self-contained
 chat GUI (`webui/index.html`) and streams `/v1/*` through to llama-server on
@@ -101,6 +133,10 @@ chat GUI (`webui/index.html`) and streams `/v1/*` through to llama-server on
 other tailnet machines. Streaming SSE is relayed chunk-by-chunk (live tokens),
 the assistant's reasoning block renders collapsible, and the conversation
 persists in localStorage. The 8080 binding is what the Tailscale ACL gates.
+
+ComfyUI has no login, so since 1.2.0 its service listens on 127.0.0.1 only. Reach it from your own devices with
+`sudo tailscale serve --bg --https=8443 http://127.0.0.1:8188`, or set `COMFY_LISTEN=0.0.0.0` when you run the services
+step to open it to the whole local network on purpose.
 
 ## 10. After a kernel update: the smoke test
 
@@ -113,16 +149,45 @@ sudo bash 05-checks/install-smoke-test.sh    # every kernel update from now on, 
 
 The installer adds two things. A kernel hook runs after DKMS's own and warns before you reboot when the nvidia module did not build for the new kernel. A oneshot service runs the full test on the first boot of each new kernel; a failure shows in `systemctl --failed` and in `journalctl -u pascal-smoke-test`. `MIN_TPS` (default 15) is the slowest generation that still passes: this card does about 22 tokens per second with a 7B in VRAM, and a CPU fallback does a fraction of that. `--remove` takes it all out again.
 
+## With an AI agent
+
+The repository is a Claude Code plugin with a skill that walks an agent through the steps, one at a time and only with
+your go ahead, since they install drivers and reboot:
+
+```text
+/plugin install pascal-llm-stack --marketplace jpsanders/pascal-llm-stack
+```
+
+On Claude Code before 2.1.275: `/plugin marketplace add jpsanders/pascal-llm-stack`, then
+`/plugin install pascal-llm-stack@pascal-llm-stack`. Other agents read
+[`skills/pascal-llm-stack/SKILL.md`](skills/pascal-llm-stack/SKILL.md).
+
+Once it runs, the proxy on port 8080 is an OpenAI compatible endpoint, so any agent or editor that takes an OpenAI
+base URL (OpenCode, aider, Continue) can use the GPU as its model: `http://127.0.0.1:8080/v1`, or your machine's
+`ts.net` address from your other devices.
+
 ## Layout
 
 ```
+pascal-llm    the entry point: steps, run, status, check, guide, man
 01-driver/    install-nvidia-driver.sh, kernel-7.0.patch
-02-cuda/      setup-build-tools.sh, install-cuda-toolkit.sh, patch-cuda.sh
-03-inference/ build-llama-cpp.sh, start-llm*.sh, start-web.sh, llama-proxy.py, webui/
+02-cuda/      setup-build-tools.sh, install-cuda-toolkit.sh, patch-cuda.sh, setup-stability.sh
+03-inference/ build-llama-cpp.sh, start-llm*.sh, start-web.sh, llama-proxy.py, webui/, setup-services.sh
 04-tailscale/ setup-tailscale.sh
 05-checks/    smoke-test.sh, install-smoke-test.sh
+docs/         MANUAL.md, the source of the man page in man/
+skills/       the agent skill
 ```
 
-## License
+## Star history
 
-MIT. The scripts and the kernel patch are original work; NVIDIA and llama.cpp artifacts are referenced by URL and patched in place, never redistributed.
+<a href="https://star-history.com/#jpsanders/pascal-llm-stack&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=jpsanders/pascal-llm-stack&type=Date&theme=dark">
+    <img alt="Star history of jpsanders/pascal-llm-stack" src="https://api.star-history.com/svg?repos=jpsanders/pascal-llm-stack&type=Date">
+  </picture>
+</a>
+
+## Licence
+
+MIT. Made by [James Phillip Sanders](https://jamesphillipsanders.com). The scripts and the kernel patch are original work; NVIDIA and llama.cpp artifacts are referenced by URL and patched in place, never redistributed.

@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# pascal-llm: one entry point for the numbered steps of pascal-llm-stack.
+#
+#   ./pascal-llm steps              the steps, in order, with the script each one runs
+#   ./pascal-llm run <step>         run one step (most need sudo; each script says what it does first)
+#   ./pascal-llm status             the driver, the GPU, the services and the API, read only
+#   ./pascal-llm check              the smoke test from step 10
+#   ./pascal-llm guide              the full manual, for people and agents
+#   ./pascal-llm man                the manual as a man page
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+VERSION="1.2.0"
+
+# step name, script, what it does (order matters)
+STEPS=(
+  "driver|01-driver/install-nvidia-driver.sh|NVIDIA 570.211.01 patched for kernel 7.0, installed with DKMS"
+  "build-tools|02-cuda/setup-build-tools.sh|compilers and build tools, without Ubuntu's CUDA package"
+  "cuda|02-cuda/install-cuda-toolkit.sh|CUDA 12.8.1 from the runfile, toolkit only, with its glibc fix"
+  "llama|03-inference/build-llama-cpp.sh|llama.cpp built for sm_61 (run as your user)"
+  "services|03-inference/setup-services.sh|systemd services: llama-server, the web and API proxy on 8080, ComfyUI"
+  "tailscale|04-tailscale/setup-tailscale.sh|Tailscale, and the proxy served to your tailnet only"
+  "smoke-test|05-checks/install-smoke-test.sh|the smoke test after every kernel update and at first boot"
+  "stability|02-cuda/setup-stability.sh|optional: a 16 GB swapfile and a 70 W power limit; edit the paths first"
+  "diffusion|03-inference/download-diffusion.sh|optional: image and video models for ComfyUI; edit the paths first"
+  "big-model|03-inference/use-27b.sh|optional: switch to a 27B model, about 2 tokens a second; set MODEL"
+)
+
+usage() {
+  cat <<'EOF'
+pascal-llm: run local LLMs on a Pascal GPU (GTX 1060 class) under the newest Ubuntu.
+
+Usage:
+  pascal-llm steps            the steps, in order, with the script each one runs
+  pascal-llm run <step>       run one step; most need sudo
+  pascal-llm status           driver, GPU, services and API, read only
+  pascal-llm check            the smoke test: module, nvidia-smi, CUDA, a token rate on the GPU
+  pascal-llm guide            the full manual, for people and agents
+  pascal-llm man [--install]  the manual as a man page; --install makes `man pascal-llm` work
+  pascal-llm --version
+EOF
+}
+
+steps() {
+  local i=1 entry name script about
+  for entry in "${STEPS[@]}"; do
+    IFS='|' read -r name script about <<<"$entry"
+    printf '%2d  %-12s %-40s %s\n' "$i" "$name" "$script" "$about"
+    i=$((i + 1))
+  done
+}
+
+run_step() {
+  local wanted="${1:-}" entry name script about
+  [ -n "$wanted" ] || { echo "pascal-llm: name a step; see: pascal-llm steps" >&2; exit 2; }
+  for entry in "${STEPS[@]}"; do
+    IFS='|' read -r name script about <<<"$entry"
+    if [ "$name" = "$wanted" ]; then
+      echo "pascal-llm: step $name: $about"
+      echo "pascal-llm: running $script"
+      exec bash "$ROOT/$script"
+    fi
+  done
+  echo "pascal-llm: no step named \"$wanted\"; see: pascal-llm steps" >&2
+  exit 2
+}
+
+say() { printf '%-10s %s\n' "$1" "$2"; }
+
+status() {
+  if lsmod 2>/dev/null | grep -q '^nvidia '; then say module "nvidia loaded"; else say module "nvidia NOT loaded"; fi
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    say gpu "$(nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total,temperature.gpu \
+      --format=csv,noheader 2>/dev/null || echo 'nvidia-smi failed')"
+  else
+    say gpu "nvidia-smi not found"
+  fi
+  if [ -x /usr/local/cuda-12.8/bin/nvcc ]; then say cuda "12.8 at /usr/local/cuda-12.8"; else say cuda "not installed"; fi
+  local unit
+  for unit in llama-server llama-web comfyui; do
+    if command -v systemctl >/dev/null 2>&1; then
+      say "$unit" "$(systemctl is-active "$unit" 2>/dev/null || true)"
+    fi
+  done
+  if command -v curl >/dev/null 2>&1 && curl -sf -m 3 http://127.0.0.1:8080/v1/models >/dev/null 2>&1; then
+    say api "http://127.0.0.1:8080/v1 answers"
+  else
+    say api "http://127.0.0.1:8080/v1 not answering"
+  fi
+}
+
+man_page() {
+  local page="$ROOT/man/pascal-llm.1"
+  if [ "${1:-}" = "--install" ]; then
+    local dir="${XDG_DATA_HOME:-$HOME/.local/share}/man/man1"
+    mkdir -p "$dir" && cp "$page" "$dir/pascal-llm.1"
+    echo "installed $dir/pascal-llm.1; open it with: man pascal-llm"
+  elif [ "${1:-}" != "--raw" ] && [ -t 1 ] && command -v man >/dev/null 2>&1; then
+    man -l "$page"
+  else
+    cat "$page"
+  fi
+}
+
+case "${1:-}" in
+  steps) steps ;;
+  run) shift; run_step "${1:-}" ;;
+  status) status ;;
+  check) exec bash "$ROOT/05-checks/smoke-test.sh" ;;
+  guide) cat "$ROOT/docs/MANUAL.md" ;;
+  man) shift; man_page "${1:-}" ;;
+  -v | --version) echo "pascal-llm $VERSION" ;;
+  -h | --help | "") usage ;;
+  *) echo "pascal-llm: unknown command \"$1\"; see: pascal-llm --help" >&2; exit 2 ;;
+esac

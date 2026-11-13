@@ -1,0 +1,24 @@
+---
+name: Bug report
+description: A step that failed on your machine, or a check that did not pass
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The step, what it printed at the end, and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: ./pascal-llm status
+      render: text
+  - type: input
+    id: machine
+    attributes:
+      label: GPU, kernel and Ubuntu
+      placeholder: GTX 1060 Mobile 6 GB, kernel 7.0.0-38, Ubuntu 26.04.1
+    validations:
+      required: true

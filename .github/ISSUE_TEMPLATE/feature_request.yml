@@ -1,0 +1,12 @@
+---
+name: Feature request
+description: Another Pascal card, kernel, model or service
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to run
+      description: The card, the kernel and what fails today.
+    validations:
+      required: true

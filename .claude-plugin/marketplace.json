@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "pascal-llm-stack",
+  "description": "Local LLMs on a 2016 Pascal GPU under the newest Ubuntu and kernel.",
+  "owner": {
+    "name": "James Phillip Sanders",
+    "email": "hello@jamesphillipsanders.com"
+  },
+  "plugins": [
+    {
+      "name": "pascal-llm-stack",
+      "description": "A skill that sets up and checks the driver, CUDA, llama.cpp and the services on a Pascal GPU, with your go ahead at every step.",
+      "version": "1.2.0",
+      "source": "./",
+      "category": "development",
+      "homepage": "https://github.com/jpsanders/pascal-llm-stack"
+    }
+  ]
+}

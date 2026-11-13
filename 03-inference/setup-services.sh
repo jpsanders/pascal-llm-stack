@@ -8,6 +8,8 @@
 # Run with:  sudo bash ~/nvidia-gpu-install/setup-services.sh
 # Set MODEL to your 7B GGUF file (sudo MODEL=/path/to/model.gguf bash ...);
 # the default path is only an example.
+# ComfyUI listens on 127.0.0.1 and has no login. Reach it over the tailnet with
+# `tailscale serve --bg --https=8443 http://127.0.0.1:8188`; COMFY_LISTEN=0.0.0.0 opens it to the whole LAN.
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Run with: sudo bash $0"; exit 1; }
 
@@ -51,7 +53,7 @@ Conflicts=llama-server.service
 User=$U
 Environment=$ENV
 WorkingDirectory=$REAL_HOME/ComfyUI
-ExecStart=$REAL_HOME/comfy-venv/bin/python main.py --listen 0.0.0.0 --port 8188 --output-directory /mnt/ai-store/comfy/output --fp32-vae --cache-ram 6
+ExecStart=$REAL_HOME/comfy-venv/bin/python main.py --listen ${COMFY_LISTEN:-127.0.0.1} --port 8188 --output-directory /mnt/ai-store/comfy/output --fp32-vae --cache-ram 6
 Restart=on-failure
 RestartSec=5
 

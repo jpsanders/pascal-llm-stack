@@ -1,0 +1,14 @@
+{
+  "name": "pascal-llm-stack",
+  "description": "A skill for running local LLMs on a Pascal GPU (GTX 1060 class) under the newest Ubuntu and kernel, step by step and checked.",
+  "version": "1.2.0",
+  "author": {
+    "name": "James Phillip Sanders",
+    "email": "hello@jamesphillipsanders.com",
+    "url": "https://jamesphillipsanders.com"
+  },
+  "homepage": "https://github.com/jpsanders/pascal-llm-stack",
+  "repository": "https://github.com/jpsanders/pascal-llm-stack",
+  "license": "MIT",
+  "keywords": ["llm", "llama-cpp", "nvidia", "pascal", "cuda", "local-llm", "ubuntu"]
+}

@@ -1,0 +1,109 @@
+.TH PASCAL-LLM 1 "" "pascal-llm" "User Commands"
+.SH NAME
+pascal-llm \- run local LLMs on a 2016 Pascal GPU under the newest Ubuntu and kernel
+.SH SYNOPSIS
+.RS 4
+.nf
+\&./pascal\-llm steps
+\&./pascal\-llm run STEP
+\&./pascal\-llm status
+\&./pascal\-llm check
+\&./pascal\-llm guide
+\&./pascal\-llm man [\-\-install | \-\-raw]
+\&./pascal\-llm \-\-version
+.fi
+.RE
+.SH DESCRIPTION
+.PP
+pascal-llm-stack is a recipe, proven on one machine, for running local LLMs on a Pascal GPU (a GTX 1060 Mobile with 6 GB) under Ubuntu 26.04 and kernel 7.0: the NVIDIA 570 driver patched for kernel 7.0, CUDA 12.8 (the last branch that compiles \fBsm_61\fR), llama.cpp built for the card, systemd services, a proxy that serves a chat page and an OpenAI style API on port 8080, ComfyUI for images and video, Tailscale serving to your own devices only, and a smoke test that runs after every kernel update. The 7B model serves about 22 tokens a second.
+.PP
+\fBpascal\-llm\fR is the one entry point to the numbered scripts. Each step is a plain script you can read first; most need sudo, and each says what it does when it starts.
+.SH COMMANDS
+.TP
+\fBsteps\fR
+List the steps in order, with the script each one runs.
+.TP
+\fBrun STEP\fR
+Run one step. Most need sudo; the driver step reboots.
+.TP
+\fBstatus\fR
+Read only: the kernel module, the GPU, CUDA, the three services and the API on 8080.
+.TP
+\fBcheck\fR
+The smoke test: module, \fBnvidia\-smi\fR, \fBlibcuda\fR against the 570 userspace, a token rate on the GPU.
+.TP
+\fBguide\fR
+Print this manual as Markdown, for people and agents.
+.TP
+\fBman\fR
+Show this manual as a man page; \fB\-\-install\fR makes \fBman pascal\-llm\fR work.
+.SH STEPS
+.TP
+\fBdriver\fR
+\fB01\-driver/install\-nvidia\-driver.sh\fR: NVIDIA 570.211.01 with the kernel 7.0 patch, through DKMS.
+.TP
+\fBbuild\-tools\fR
+\fB02\-cuda/setup\-build\-tools.sh\fR: compilers and build tools, without Ubuntu's CUDA package.
+.TP
+\fBcuda\fR
+\fB02\-cuda/install\-cuda\-toolkit.sh\fR: CUDA 12.8.1 from the runfile, toolkit only, with the glibc fix.
+.TP
+\fBllama\fR
+\fB03\-inference/build\-llama\-cpp.sh\fR: llama.cpp for \fBsm_61\fR, run as your own user.
+.TP
+\fBservices\fR
+\fB03\-inference/setup\-services.sh\fR: llama-server, the proxy on 8080 and ComfyUI as systemd services.
+.TP
+\fBtailscale\fR
+\fB04\-tailscale/setup\-tailscale.sh\fR: Tailscale, with \fBtailscale serve\fR to your tailnet only.
+.TP
+\fBsmoke\-test\fR
+\fB05\-checks/install\-smoke\-test.sh\fR: the smoke test after every kernel update and at first boot.
+.TP
+\fBstability\fR
+Optional. \fB02\-cuda/setup\-stability.sh\fR: a 16 GB swapfile and a 70 W power limit; edit the paths first.
+.TP
+\fBdiffusion\fR
+Optional. \fB03\-inference/download\-diffusion.sh\fR: image and video models; edit the paths first.
+.TP
+\fBbig\-model\fR
+Optional. \fB03\-inference/use\-27b.sh\fR: a 27B model at about 2 tokens a second; set \fBMODEL\fR.
+.SH SERVICES AND PORTS
+.PP
+\fBllama\-server\fR listens on 127.0.0.1:8090. \fBllama\-web\fR is the proxy on 8080: a chat page and \fB/v1/*\fR streamed to llama-server, and the one port Tailscale serves. \fBcomfyui\fR listens on 127.0.0.1:8188. llama-server and ComfyUI conflict on purpose, so starting one stops the other and the 6 GB of memory goes to one workload at a time.
+.SH ENVIRONMENT
+.PP
+\fBMODEL\fR is the GGUF file for the services and the 27B switch. \fBCOMFY_LISTEN\fR is ComfyUI's listen address, 127.0.0.1 by default; ComfyUI has no login, so open it to the network only on purpose. \fBXDG_DATA_HOME\fR moves the man folder \fBman \-\-install\fR writes to.
+.SH FILES
+.PP
+The smoke test logs to the journal (\fBjournalctl \-u pascal\-smoke\-test\fR, tag \fBpascal\-smoke\fR) and keeps its state in \fB/var/lib/pascal\-smoke\fR; a failed DKMS build is explained in \fB/var/lib/dkms/nvidia/<version>/build/make.log\fR. The services are \fB/etc/systemd/system/llama\-server.service\fR, \fBllama\-web.service\fR and \fBcomfyui.service\fR.
+.SH EXIT STATUS
+.PP
+0 on success. 2 for an unknown command or step. \fBcheck\fR exits non zero when any part of the stack fails, and a \fBrun\fR exits with its script's status.
+.SH EXAMPLES
+.PP
+From a fresh Ubuntu 26.04 install on a Pascal laptop:
+.RS 4
+.nf
+\&./pascal\-llm steps
+sudo ./pascal\-llm run driver          # reboots
+sudo ./pascal\-llm run build\-tools
+sudo ./pascal\-llm run cuda
+\&./pascal\-llm run llama
+sudo MODEL=/path/to/model.gguf ./pascal\-llm run services
+sudo ./pascal\-llm run tailscale
+sudo ./pascal\-llm run smoke\-test
+\&./pascal\-llm status
+.fi
+.RE
+.PP
+Any OpenAI client then talks to \fBhttp://127.0.0.1:8080/v1\fR, or to your machine's \fBts.net\fR address from your other devices.
+.SH FOR AGENTS
+.PP
+Start with \fB./pascal\-llm status\fR and \fB./pascal\-llm steps\fR. Run steps in order, one at a time, and read each script before running it: they install drivers, reboot and write system files, so each needs the person's go ahead. After a kernel update, run \fB./pascal\-llm check\fR before anything else. Use the API on port 8080 as an OpenAI compatible model endpoint; never expose it with \fBtailscale funnel\fR.
+.SH SEE ALSO
+.PP
+https://github.com/jpsanders/pascal-llm-stack
+.SH AUTHOR
+.PP
+James Phillip Sanders, https://jamesphillipsanders.com

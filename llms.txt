@@ -1,0 +1,13 @@
+# pascal-llm-stack
+
+> A recipe, proven on one machine, for local LLMs on a 2016 Pascal GPU (GTX 1060, 6 GB, sm_61) under Ubuntu 26.04 and
+> kernel 7.0: the NVIDIA 570 driver patched for kernel 7.0, CUDA 12.8, llama.cpp, systemd services, an OpenAI
+> compatible API on port 8080, Tailscale, and a smoke test after every kernel update. About 22 tokens a second on a 7B.
+
+Start: clone it on the GPU machine, then `./pascal-llm steps`, `sudo ./pascal-llm run driver` and on in order.
+
+## Docs
+
+- [Manual](https://github.com/jpsanders/pascal-llm-stack/blob/main/docs/MANUAL.md): steps, services, ports, checks
+- [README](https://github.com/jpsanders/pascal-llm-stack/blob/main/README.md): why each step exists, every trap
+- [Skill](https://github.com/jpsanders/pascal-llm-stack/blob/main/skills/pascal-llm-stack/SKILL.md): rules for agents
