@@ -34,7 +34,7 @@ need sudo, and each says what it does when it starts.
 | `steps` | List the steps in order, with the script each one runs. |
 | `run STEP` | Run one step. Most need sudo; the driver step reboots. |
 | `status` | Read only: the kernel module, the GPU, CUDA, the three services and the API on 8080. |
-| `check` | The smoke test: module, `nvidia-smi`, `libcuda` against the 570 userspace, a token rate on the GPU. |
+| `check` | The smoke test in two parts. Is the GPU available: module, `nvidia-smi`, `libcuda` against the 570 userspace. Does the workload still behave: a token rate on the GPU against its floor and baseline. |
 | `guide` | Print this manual as Markdown, for people and agents. |
 | `man` | Show this manual as a man page; `--install` makes `man pascal-llm` work. |
 
@@ -63,18 +63,21 @@ conflict on purpose, so starting one stops the other and the 6 GB of memory goes
 
 `MODEL` is the GGUF file for the services and the 27B switch. `COMFY_LISTEN` is ComfyUI's listen address, 127.0.0.1
 by default; ComfyUI has no login, so open it to the network only on purpose. `XDG_DATA_HOME` moves the man folder
-`man --install` writes to.
+`man --install` writes to. The smoke test reads `MIN_TPS` (the floor, 15 tokens a second), `BASELINE_TPS` (a fixed
+baseline; by default the median of the model's last five good runs) and `DRIFT_PCT` (how many percent under the
+baseline a run may fall before it warns, 15).
 
 ## FILES
 
-The smoke test logs to the journal (`journalctl -u pascal-smoke-test`, tag `pascal-smoke`) and keeps its state in
-`/var/lib/pascal-smoke`; a failed DKMS build is explained in `/var/lib/dkms/nvidia/<version>/build/make.log`. The
+The smoke test logs to the journal (`journalctl -u pascal-smoke-test`, tag `pascal-smoke`) and keeps its state and
+`results.tsv`, one line per run, in `/var/lib/pascal-smoke` (a run by hand without sudo writes
+`~/.local/state/pascal-smoke/results.tsv`); a failed DKMS build is explained in `/var/lib/dkms/nvidia/<version>/build/make.log`. The
 services are `/etc/systemd/system/llama-server.service`, `llama-web.service` and `comfyui.service`.
 
 ## EXIT STATUS
 
-0 on success. 2 for an unknown command or step. `check` exits non zero when any part of the stack fails, and a `run`
-exits with its script's status.
+0 on success. 2 for an unknown command or step. `check` exits 1 when the GPU layer fails and 3 when the GPU is fine
+but the workload is not; a speed under the baseline is a warning and exits 0. A `run` exits with its script's status.
 
 ## EXAMPLES
 

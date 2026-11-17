@@ -21,6 +21,8 @@ jobs:
         run: |
           for f in pascal-llm $(git ls-files '*.sh'); do bash -n "$f"; done
           shellcheck --severity=error pascal-llm $(git ls-files '*.sh')
+      - name: The smoke test's verdicts, with a fake GPU and a fake llama-server
+        run: bash 05-checks/test-smoke-test.sh
       - name: The Python files compile
         run: python3 -m py_compile $(git ls-files '*.py')
       - name: The ComfyUI workflows are valid JSON

@@ -10,7 +10,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-VERSION="1.2.0"
+VERSION="1.3.0"
 
 # step name, script, what it does (order matters)
 STEPS=(
@@ -34,7 +34,7 @@ Usage:
   pascal-llm steps            the steps, in order, with the script each one runs
   pascal-llm run <step>       run one step; most need sudo
   pascal-llm status           driver, GPU, services and API, read only
-  pascal-llm check            the smoke test: module, nvidia-smi, CUDA, a token rate on the GPU
+  pascal-llm check            the smoke test: is the GPU available, does the workload still behave
   pascal-llm guide            the full manual, for people and agents
   pascal-llm man [--install]  the manual as a man page; --install makes `man pascal-llm` work
   pascal-llm --version

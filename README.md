@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/jpsanders/pascal-llm-stack/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/jpsanders/pascal-llm-stack/ci.yml?branch=main&label=CI&logo=github"></a>
-  <a href="https://github.com/jpsanders/pascal-llm-stack/releases/latest"><img alt="Release 1.2.0" src="https://img.shields.io/badge/release-1.2.0-a95719"></a>
+  <a href="https://github.com/jpsanders/pascal-llm-stack/releases/latest"><img alt="Release 1.3.0" src="https://img.shields.io/badge/release-1.3.0-a95719"></a>
   <img alt="GTX 1060, Pascal sm_61" src="https://img.shields.io/badge/GPU-GTX%201060%20(sm__61)-76B900?logo=nvidia&logoColor=white">
   <img alt="Ubuntu 26.04, kernel 7.0" src="https://img.shields.io/badge/ubuntu-26.04%20%7C%20kernel%207.0-E95420?logo=ubuntu&logoColor=white">
   <img alt="CUDA 12.8" src="https://img.shields.io/badge/CUDA-12.8-76B900">
@@ -140,14 +140,18 @@ step to open it to the whole local network on purpose.
 
 ## 10. After a kernel update: the smoke test
 
-DKMS rebuilds the patched module for every new kernel, but nothing tells you when that build fails until the GPU has gone missing after a reboot. `05-checks/smoke-test.sh` checks each layer an update can break, from the bottom up: the DKMS build for the running kernel, the version of the loaded module, `nvidia-smi` and the compute capability, `libcuda.so.1` still pointing at the 570 userspace (the trap in section 3), and llama-server answering on the GPU at a sane speed. It prints PASS, FAIL or SKIP for each check and exits 1 on any failure.
+DKMS rebuilds the patched module for every new kernel, but nothing tells you when that build fails until the GPU has gone missing after a reboot. `05-checks/smoke-test.sh` answers two questions separately, each from the bottom up. Is the GPU available: the DKMS build for the running kernel, the version of the loaded module, `nvidia-smi` and the compute capability, and `libcuda.so.1` still pointing at the 570 userspace (the trap in section 3). Does the workload still behave: llama-server answering on the GPU, and its speed against a floor and a baseline. It prints PASS, WARN, FAIL or SKIP for each check, then one verdict for each question.
 
 ```bash
 bash 05-checks/smoke-test.sh                 # any time
 sudo bash 05-checks/install-smoke-test.sh    # every kernel update from now on, automatically
 ```
 
-The installer adds two things. A kernel hook runs after DKMS's own and warns before you reboot when the nvidia module did not build for the new kernel. A oneshot service runs the full test on the first boot of each new kernel; a failure shows in `systemctl --failed` and in `journalctl -u pascal-smoke-test`. `MIN_TPS` (default 15) is the slowest generation that still passes: this card does about 22 tokens per second with a 7B in VRAM, and a CPU fallback does a fraction of that. `--remove` takes it all out again.
+`MIN_TPS` (default 15) is the floor: a CPU fallback lands far under it, so a slower run fails. The baseline is what tells a broken update from ordinary variation. Every run appends one line to `results.tsv`, in `/var/lib/pascal-smoke` (or `~/.local/state/pascal-smoke` when you run it by hand without sudo): the time, kernel, loaded driver, GPU, model, tokens per second, the baseline and both verdicts. The baseline is the median of the model's last five good runs, or `BASELINE_TPS` when you set it; this card does about 22 tokens per second with a 7B at Q5_K_M in VRAM. A run more than `DRIFT_PCT` (default 15) percent under the baseline is a warning, not a failure, and it names the kernel and driver of the last good run, so you can see what changed. The exit status is 0 when both questions pass, 1 when the GPU layer fails, and 3 when the GPU is fine but the workload is not.
+
+The installer adds two things. A kernel hook runs after DKMS's own and warns before you reboot when the nvidia module did not build for the new kernel. A oneshot service runs the full test on the first boot of each new kernel; a failure shows in `systemctl --failed` and in `journalctl -u pascal-smoke-test`. `--remove` takes it all out again. The service runs an installed copy, so after you update this repository, run the installer again.
+
+`05-checks/test-smoke-test.sh` checks the verdicts without a GPU, against a fake driver and a fake llama-server; CI runs it on every push. It proves the logic, not the stack.
 
 ## With an AI agent
 
@@ -174,7 +178,7 @@ pascal-llm    the entry point: steps, run, status, check, guide, man
 02-cuda/      setup-build-tools.sh, install-cuda-toolkit.sh, patch-cuda.sh, setup-stability.sh
 03-inference/ build-llama-cpp.sh, start-llm*.sh, start-web.sh, llama-proxy.py, webui/, setup-services.sh
 04-tailscale/ setup-tailscale.sh
-05-checks/    smoke-test.sh, install-smoke-test.sh
+05-checks/    smoke-test.sh, install-smoke-test.sh, test-smoke-test.sh
 docs/         MANUAL.md, the source of the man page in man/
 skills/       the agent skill
 ```

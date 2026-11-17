@@ -30,7 +30,7 @@ Run one step. Most need sudo; the driver step reboots.
 Read only: the kernel module, the GPU, CUDA, the three services and the API on 8080.
 .TP
 \fBcheck\fR
-The smoke test: module, \fBnvidia\-smi\fR, \fBlibcuda\fR against the 570 userspace, a token rate on the GPU.
+The smoke test in two parts. Is the GPU available: module, \fBnvidia\-smi\fR, \fBlibcuda\fR against the 570 userspace. Does the workload still behave: a token rate on the GPU against its floor and baseline.
 .TP
 \fBguide\fR
 Print this manual as Markdown, for people and agents.
@@ -73,13 +73,13 @@ Optional. \fB03\-inference/use\-27b.sh\fR: a 27B model at about 2 tokens a secon
 \fBllama\-server\fR listens on 127.0.0.1:8090. \fBllama\-web\fR is the proxy on 8080: a chat page and \fB/v1/*\fR streamed to llama-server, and the one port Tailscale serves. \fBcomfyui\fR listens on 127.0.0.1:8188. llama-server and ComfyUI conflict on purpose, so starting one stops the other and the 6 GB of memory goes to one workload at a time.
 .SH ENVIRONMENT
 .PP
-\fBMODEL\fR is the GGUF file for the services and the 27B switch. \fBCOMFY_LISTEN\fR is ComfyUI's listen address, 127.0.0.1 by default; ComfyUI has no login, so open it to the network only on purpose. \fBXDG_DATA_HOME\fR moves the man folder \fBman \-\-install\fR writes to.
+\fBMODEL\fR is the GGUF file for the services and the 27B switch. \fBCOMFY_LISTEN\fR is ComfyUI's listen address, 127.0.0.1 by default; ComfyUI has no login, so open it to the network only on purpose. \fBXDG_DATA_HOME\fR moves the man folder \fBman \-\-install\fR writes to. The smoke test reads \fBMIN_TPS\fR (the floor, 15 tokens a second), \fBBASELINE_TPS\fR (a fixed baseline; by default the median of the model's last five good runs) and \fBDRIFT_PCT\fR (how many percent under the baseline a run may fall before it warns, 15).
 .SH FILES
 .PP
-The smoke test logs to the journal (\fBjournalctl \-u pascal\-smoke\-test\fR, tag \fBpascal\-smoke\fR) and keeps its state in \fB/var/lib/pascal\-smoke\fR; a failed DKMS build is explained in \fB/var/lib/dkms/nvidia/<version>/build/make.log\fR. The services are \fB/etc/systemd/system/llama\-server.service\fR, \fBllama\-web.service\fR and \fBcomfyui.service\fR.
+The smoke test logs to the journal (\fBjournalctl \-u pascal\-smoke\-test\fR, tag \fBpascal\-smoke\fR) and keeps its state and \fBresults.tsv\fR, one line per run, in \fB/var/lib/pascal\-smoke\fR (a run by hand without sudo writes \fB~/.local/state/pascal\-smoke/results.tsv\fR); a failed DKMS build is explained in \fB/var/lib/dkms/nvidia/<version>/build/make.log\fR. The services are \fB/etc/systemd/system/llama\-server.service\fR, \fBllama\-web.service\fR and \fBcomfyui.service\fR.
 .SH EXIT STATUS
 .PP
-0 on success. 2 for an unknown command or step. \fBcheck\fR exits non zero when any part of the stack fails, and a \fBrun\fR exits with its script's status.
+0 on success. 2 for an unknown command or step. \fBcheck\fR exits 1 when the GPU layer fails and 3 when the GPU is fine but the workload is not; a speed under the baseline is a warning and exits 0. A \fBrun\fR exits with its script's status.
 .SH EXAMPLES
 .PP
 From a fresh Ubuntu 26.04 install on a Pascal laptop:

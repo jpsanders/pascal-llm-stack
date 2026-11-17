@@ -9,6 +9,7 @@ Instructions for AI coding agents working on pascal-llm-stack itself. To use it 
 ./pascal-llm steps                          # the steps and their scripts
 python3 scripts/build_man.py                # rebuild man/pascal-llm.1 after editing docs/MANUAL.md
 shellcheck --severity=error pascal-llm $(git ls-files '*.sh')   # what CI runs, with bash -n and py_compile
+bash 05-checks/test-smoke-test.sh           # the smoke test's verdicts with a fake GPU, also in CI
 ```
 
 ## Rules
